@@ -23,6 +23,20 @@ countryList = as.list(c(NoAm_country, SoAm_country, Oceana_country,
     Africa_country,  Asia_country, Eur_country))
 
 
+## Get the area and item mapping
+areaMapping = GetTableData(schemaName = "ess", tableName = "fal_2_m49")
+setnames(areaMapping,
+         old = c("fal", "m49"),
+         new = c("geographicAreaFS", "geographicAreaM49"))
+areaMapping[, geographicAreaFS := as.numeric(geographicAreaFS)]
+itemMapping = GetTableData(schemaName = "ess", tableName = "fcl_2_cpc")
+setnames(itemMapping,
+         old = c("fcl", "cpc"),
+         new = c("measuredItemFS", "measuredItemCPC"))
+## This is a hack since there is one cpc to multiple fs item
+itemMapping = itemMapping[!measuredItemFS %in% c("0067", "0068"), ]
+
+
 ## Download general World Bank data
 ## ---------------------------------------------------------------------
 

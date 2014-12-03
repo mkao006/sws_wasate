@@ -35,67 +35,8 @@ print(GetCodeList(domain = "agriculture", dataset = "agriculture",
 
 
 
-getLossData = function(){
 
-    ## Set up the query
-    ##
-    ## NOTE (Michael): The year is set by Klaus
-    allCountryCodesTable =
-        GetCodeList(domain = "agriculture",
-                    dataset = "agriculture",
-                    dimension = "geographicAreaM49")
-
-    ## NOTE (Michael): This is just a test, need to get Nick to
-    ##                 develop a better hierachical system.
-    cerealTree =
-        adjacent2edge(GetCodeTree(domain = "agriculture",
-                                  dataset = "agriculture",
-                                  dimension = "measuredItemCPC",
-                                  roots = "011"))
-    dimensions =
-        list(
-            Dimension(name = "geographicAreaM49",
-                      keys = allCountryCodesTable[type == "country", code]),
-            Dimension(name = "measuredItemCPC", keys = cerealTree$children),
-            Dimension(name = "measuredElement", keys = unname(requiredElements)),
-            Dimension(name = "timePointYears", keys = as.character(1969:2013))
-        )
-
-    newDataKey =
-        DatasetKey(domain = "agriculture",
-                   dataset = "agriculture",
-                   dimensions = dimensions)
-
-    newPivot = c(
-        Pivoting(code = areaVar, ascending = TRUE),
-        Pivoting(code = itemVar, ascending = TRUE),
-        Pivoting(code = yearVar, ascending = FALSE),
-        Pivoting(code = elementVar, ascending = TRUE)
-    )
-
-    ## Query the data
-    query = GetData(
-        key = newDataKey,
-        flags = TRUE,
-        normalized = FALSE,
-        pivoting = newPivot
-    )
-}
 lossData = getLossData()
-
-
-calculateLossRatio = function(data, productionValue, importValue,
-    stockWithdrawlValue, lossValue){
-
-    data[data[[stockWithdrawlValue]] >= 0,
-         lossRatio := .SD[[lossValue]]/(.SD[[productionValue]] +
-                                        .SD[[importValue]] +
-                                        .SD[[stockWithdrawlValue]])]
-    data[data[[stockWithdrawlValue]] < 0,
-         lossRatio := .SD[[lossValue]]/(.SD[[productionValue]] +
-                                        .SD[[importValue]])]
-    data
-}
 
 calculateLossRatio(data = lossData,
                    productionValue = paste0(valuePrefix,

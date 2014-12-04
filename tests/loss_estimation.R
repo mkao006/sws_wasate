@@ -1,8 +1,4 @@
 source("update_loss_external_data.R")
-## source("get_sua_data.R")
-## source("commodityFoodGroupClassification.R")
-## load("lossData.RData")
-## load("lossExternalData.RData")
 
 suppressMessages({
     library(faosws)
@@ -36,7 +32,7 @@ if(Sys.getenv("USER") == "mk"){
 
 
 
-## Merge everything together for now
+## Function to get the 2 external world bank data sets and merge them
 getLossExternalData = function(){
     ## TODO (Michael): Get the data using R API    
     Reduce(f = function(x, y){
@@ -44,13 +40,14 @@ getLossExternalData = function(){
     }, x = list(worldBankGeneralData, worldBankClimateData))
 }
 
-
+## Function to load the loss food group classification
 getLossFoodGroup = function(){
     ## NOTE (Michael): This will be replaced by the GetMapping
     ##                 function when loaded into the data base
     data.table(read.csv(file = "lossFoodGroup.csv"))
 }
 
+## Function to load the loss region classification
 getLossRegionClass = function(){
     ## NOTE (Michael): This will be replaced by the GetMapping
     ##                 function when loaded into the data base.
@@ -59,14 +56,14 @@ getLossRegionClass = function(){
     regionMapping
 }
 
-
+## Function to load the national fbs dataset
 getNationalFbs = function(){
     ## NOTE (Michael): This will be replaced by the GetMapping
     ##                 function when loaded into the data base.
     data.table(read.csv(file = "finalNationalFbs.csv"))
 }
 
-
+## Function to load the data required for loss estimation
 getLossData = function(){
     ## Set up the query
     ##
@@ -116,6 +113,7 @@ getLossData = function(){
 }
 
 
+## Function to merge the national fbs data to the loss data
 mergeNationalFbs = function(lossData, nationalFbs){
     lossData[, fromNationalFbs := 0]
     nationalFbs[, fromNationalFbs := 1]
@@ -124,8 +122,8 @@ mergeNationalFbs = function(lossData, nationalFbs){
 }
     
 
-
-mergeAllData = function(lossData, lossExternalData, lossFoodGroup,
+## Function to merge all the required data
+mergeAllLossData = function(lossData, lossExternalData, lossFoodGroup,
     lossRegionClass){
     Reduce(f = function(x, y){
         merge(x, y, all.x = TRUE, by = intersect(colnames(x), colnames(y)))
@@ -137,15 +135,17 @@ mergeAllData = function(lossData, lossExternalData, lossFoodGroup,
 
 
 
-## TODO (Michael): Need to check the missing values!
+## TODO (Michael): Need to check the missing values.
+##
+## Merge everything together
 finalLossData =
-    mergeAllData(lossData = mergeNationalFbs(getLossData(), getNationalFbs()),
-                 lossExternalData = getLossExternalData(),
-                 lossFoodGroup = getLossFoodGroup(),
-                 lossRegionClass = getLossRegionClass())
+    mergeAllLossData(lossData = mergeNationalFbs(getLossData(), getNationalFbs()),
+                     lossExternalData = getLossExternalData(),
+                     lossFoodGroup = getLossFoodGroup(),
+                     lossRegionClass = getLossRegionClass())
 
 
-
+## Function to calculate the ratio
 calculateLossRatio = function(data,
     productionValue = paste0(valuePrefix, requiredElements["production"]),
     importValue = paste0(valuePrefix, requiredElements["import"]),
@@ -164,27 +164,8 @@ calculateLossRatio = function(data,
 
 
 
-calculateLossRatio(data = finalLossData,
-                   productionValue = paste0(valuePrefix,
-                       requiredElements["production"]),
-                   importValue = paste0(valuePrefix,
-                       requiredElements["import"]),
-                   stockWithdrawlValue = paste0(valuePrefix,
-                       requiredElements["stockWithdrawl"]),
-                   lossValue = paste0(valuePrefix,
-                       requiredElements["loss"]))                   
-
-
-
-## ## Assuming that we have the data ready
-## rawData = data.table(
-##     subset(read.dta("./Dataset for Estimation and Prediction in R.dta"),
-##         select = c(itemcode, itemname, areacode, areaname, newregion, year,
-##             foodgroup, foodgroupn, unsubregionname, continentname,
-##             pavedroads, gdp, ratio, num_61, num_51, newfbs)))
-
-
-
+## NOTE (Michael): Try to remove the hard code
+##
 ## Function to perform final manipulation
 preEstimationProcessing = function(data){
     ## Convert variables to factor for modelling
@@ -215,8 +196,6 @@ preEstimationProcessing = function(data){
 
     data
 }
-
-preEstimationProcessing(data = finalLossData)
 
 
 ## Function to create the desired estimation sample

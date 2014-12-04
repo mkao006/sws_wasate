@@ -43,5 +43,5 @@ setnames(itemMapping, old = c("fcl", "cpc"),
 mapped = merge(translatedNationalFbs, itemMapping, all.x = TRUE,
     by = "measuredItemFS")
 mapped[, `:=`(c("measuredItemFS", "geographicAreaFS"), NULL)]
-write.csv(mapped[!is.na(measuredItemCPC), ], file = "nationalFbs.csv",
+write.csv(mapped[!is.na(measuredItemCPC), ], file = "data/nationalFbs.csv",
           row.names = FALSE, na = "")

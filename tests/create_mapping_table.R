@@ -142,7 +142,7 @@ lossFoodGroup = lossFoodGroup[measuredItemFS != -1, ]
 ## TODO (Michael): recode the following
 ## ifelse(levels(foodgroup) == "meat", "meat and fish",
 ##        levels(foodgroup)))
-write.csv(lossFoodGroup, file = "lossFoodGroup.csv", row.names = FALSE, na = "")
+write.csv(lossFoodGroup, file = "data/lossFoodGroup.csv", row.names = FALSE, na = "")
 
 
 ## Write out the region grouping
@@ -157,4 +157,4 @@ setnames(areaRegionMapping,
 areaRegionMapping[, geographicAreaFS :=  as.character(geographicAreaFS)]
 lossRegionMapping = merge(areaRegionMapping, areaMapping, by = "geographicAreaFS")
 write.csv(lossRegionMapping[, list(geographicAreaM49, lossRegionClass)],
-          file = "lossRegionMapping.csv", row.names = FALSE, na = "")
+          file = "data/lossRegionMapping.csv", row.names = FALSE, na = "")

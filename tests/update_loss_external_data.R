@@ -23,19 +23,15 @@ countryList = as.list(c(NoAm_country, SoAm_country, Oceana_country,
     Africa_country,  Asia_country, Eur_country))
 
 
-## Get the area and item mapping
-areaMapping = GetTableData(schemaName = "ess", tableName = "fal_2_m49")
-setnames(areaMapping,
-         old = c("fal", "m49"),
-         new = c("geographicAreaFS", "geographicAreaM49"))
-areaMapping[, geographicAreaFS := as.numeric(geographicAreaFS)]
-itemMapping = GetTableData(schemaName = "ess", tableName = "fcl_2_cpc")
-setnames(itemMapping,
-         old = c("fcl", "cpc"),
-         new = c("measuredItemFS", "measuredItemCPC"))
-## This is a hack since there is one cpc to multiple fs item
-itemMapping = itemMapping[!measuredItemFS %in% c("0067", "0068"), ]
 
+## Set up testing environments
+if(Sys.getenv("USER") == "mk"){
+    GetTestEnvironment(
+        baseUrl = "https://hqlqasws1.hq.un.fao.org:8181/sws",
+        token = "3f113726-f40e-44b3-b2af-d5f0de77c386"
+        ## token = "7fe7cbec-2346-46de-9a3a-8437eca18e2a"
+        )
+}
 
 ## Download general World Bank data
 ## ---------------------------------------------------------------------
@@ -73,8 +69,27 @@ getWorldBankGeneralData = function(indicator, name){
     setnames(translated.dt,
              old = c("FAOST_CODE", "ISO2_WB_CODE", "Year", "Country"),
              new = c("geographicAreaFS", "geographicAreaISO2WB", "timePointYears",
-                 "geographicAreaNameISO2WB"))    
+                 "geographicAreaNameISO2WB"))
     translated.dt
+}
+
+
+translateFStoM49 = function(data){
+    ## NOTE (Michael): This is a temporary solution, the GetTableData
+    ##                 will be replaced when the GetMapping function
+    ##                 is correctly set up .
+    areaMapping = GetTableData(schemaName = "ess", tableName = "fal_2_m49")
+    setnames(areaMapping,
+             old = c("fal", "m49"),
+             new = c("geographicAreaFS", "geographicAreaM49"))
+    areaMapping[, geographicAreaFS := as.numeric(geographicAreaFS)]
+    mapped = merge(data, areaMapping, by = "geographicAreaFS", all.x = TRUE)
+    setkeyv(mapped, c("geographicAreaM49", "timePointYears"))
+    setcolorder(mapped,
+                neworder = c(key(mapped),
+                    colnames(mapped)[!colnames(mapped) %in% key(mapped)]))
+                    
+    mapped
 }
 
 
@@ -87,7 +102,8 @@ SaveWorldBankGeneralWBData = function(data){
 
 worldBankGeneralData =
     getWorldBankGeneralData(indicator = requiredIndicator,
-                            name = requiredIndicatorName) %T>%
+                            name = requiredIndicatorName) %>%
+    translateFStoM49 %T>%
     SaveWorldBankGeneralWBData
                             
 
@@ -166,7 +182,9 @@ mergeWorldBankClimateData = function(dataList){
         data.table(translateCountryCode(data.frame(mergedClimateData),
                                         from = "ISO3_CODE", to = "FAOST_CODE",
                                         oldCode = "locator"))
-    finalClimateData = finalClimateData[!ISO3_CODE %in% c("GGY", "UMI"), ]    
+    ## NOTE (Michael): These area are not mapped in the working system
+    ##                 and thus are eliminated.
+    finalClimateData = finalClimateData[!ISO3_CODE %in% c("GGY", "UMI", "JEY"), ]
     setnames(finalClimateData,
              old = c("FAOST_CODE", "ISO3_CODE", "year"),
              new = c("geographicAreaFS", "geographicAreaISO3", "timePointYears"))
@@ -181,17 +199,7 @@ SaveWorldBankClimateData = function(data){
 
 worldBankClimateData =
     getWorldBankClimateData(countryList) %>%
-    mergeWorldBankClimateData %T>%
+    mergeWorldBankClimateData %>%
+    translateFStoM49 %T>%
     SaveWorldBankClimateData
 
-
-## Load new national FBS
-## ---------------------------------------------------------------------
-newNationalFbs = data.table(read.csv(file = "NEW_National FBS data.csv"))
-
-## Some country does not have FAOSTAT code, double check them
-newFbsAvailable =
-    unique.data.frame(newNationalFbs[!is.na(Country.Code),
-                                     list(Country.Code, year)])
-setnames(newFbsAvailable, old = c("Country.Code", "year"),
-         new = c("geographicAreaFS", "timePointYears"))

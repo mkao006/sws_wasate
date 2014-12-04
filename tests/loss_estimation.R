@@ -1,4 +1,4 @@
-## source("update_loss_external_data.R")
+source("update_loss_external_data.R")
 ## source("get_sua_data.R")
 ## source("commodityFoodGroupClassification.R")
 ## load("lossData.RData")
@@ -41,7 +41,7 @@ getLossExternalData = function(){
     ## TODO (Michael): Get the data using R API    
     Reduce(f = function(x, y){
         merge(x, y, all = TRUE, by = intersect(colnames(x), colnames(y)))
-    }, x = list(worldBankGeneralData, worldBankClimateData, newFbsAvailable))
+    }, x = list(worldBankGeneralData, worldBankClimateData))
 }
 
 
@@ -60,10 +60,12 @@ getLossRegionClass = function(){
 }
 
 
-getNewFbsStatus = function(){
+getNationalFbs = function(){
     ## NOTE (Michael): This will be replaced by the GetMapping
     ##                 function when loaded into the data base.
+    data.table(read.csv(file = "finalNationalFbs.csv"))
 }
+
 
 getLossData = function(){
     ## Set up the query
@@ -113,8 +115,18 @@ getLossData = function(){
     query
 }
 
+
+mergeNationalFbs = function(lossData, nationalFbs){
+    lossData[, fromNationalFbs := 0]
+    nationalFbs[, fromNationalFbs := 1]
+    lossWithNationalFbs = rbind(lossData, nationalFbs, fill = TRUE)
+    lossWithNationalFbs
+}
+    
+
+
 mergeAllData = function(lossData, lossExternalData, lossFoodGroup,
-    lossRegionClass, newFbs){
+    lossRegionClass){
     Reduce(f = function(x, y){
         merge(x, y, all.x = TRUE, by = intersect(colnames(x), colnames(y)))
     },
@@ -123,18 +135,22 @@ mergeAllData = function(lossData, lossExternalData, lossFoodGroup,
            )
 }
 
+
+
 ## TODO (Michael): Need to check the missing values!
 finalLossData =
-    mergeAllData(lossData = getLossData(),
-                 lossExternalData = lossExternalDataFinal,
+    mergeAllData(lossData = mergeNationalFbs(getLossData(), getNationalFbs()),
+                 lossExternalData = getLossExternalData(),
                  lossFoodGroup = getLossFoodGroup(),
-                 lossRegionClass = getLossRegionClass(),
-                 getNewFbsStatus = getNewFbsStatus())
+                 lossRegionClass = getLossRegionClass())
 
 
 
-calculateLossRatio = function(data, productionValue, importValue,
-    stockWithdrawlValue, lossValue){
+calculateLossRatio = function(data,
+    productionValue = paste0(valuePrefix, requiredElements["production"]),
+    importValue = paste0(valuePrefix, requiredElements["import"]),
+    stockWithdrawlValue = paste0(valuePrefix, requiredElements["stockWithdrawl"]),
+    lossValue = paste0(valuePrefix, requiredElements["loss"])){
 
     data[data[[stockWithdrawlValue]] >= 0,
          lossRatio := .SD[[lossValue]]/(.SD[[productionValue]] +
@@ -145,6 +161,8 @@ calculateLossRatio = function(data, productionValue, importValue,
                                         .SD[[importValue]])]
     data
 }
+
+
 
 calculateLossRatio(data = finalLossData,
                    productionValue = paste0(valuePrefix,
@@ -158,24 +176,31 @@ calculateLossRatio(data = finalLossData,
 
 
 
-## Assuming that we have the data ready
-rawData = data.table(
-    subset(read.dta("./Dataset for Estimation and Prediction in R.dta"),
-        select = c(itemcode, itemname, areacode, areaname, newregion, year,
-            foodgroup, foodgroupn, unsubregionname, continentname,
-            pavedroads, gdp, ratio, num_61, num_51, newfbs)))
+## ## Assuming that we have the data ready
+## rawData = data.table(
+##     subset(read.dta("./Dataset for Estimation and Prediction in R.dta"),
+##         select = c(itemcode, itemname, areacode, areaname, newregion, year,
+##             foodgroup, foodgroupn, unsubregionname, continentname,
+##             pavedroads, gdp, ratio, num_61, num_51, newfbs)))
+
 
 
 ## Function to perform final manipulation
 preEstimationProcessing = function(data){
+    ## Convert variables to factor for modelling
+    factorVariables = c("geographicAreaM49", "measuredItemCPC", "foodGroupName",
+                  "foodGeneralGroup", "foodPerishableGroup", "lossRegionClass")
+    data[, `:=`(c(factorVariables),
+                lapply(data[, factorVariables, with = FALSE], as.factor))]
+    
 
     ## TODO (Michael): Need to remove these hard coded processing
-    data[is.na(num_61), num_61 := 0]
-    data[is.na(num_51), num_51 := 0]
-    data[, importToProductionRatio := num_61/num_51]
-    data[, itemname := as.factor(itemname)]
-    data[, time := year - 1960]
-    data[is.na(newfbs), newfbs := 0]
+    data[is.na(Value_measuredElement_5610), Value_measuredElement_5610 := 0]
+    data[is.na(Value_measuredElement_5510), Value_measuredElement_5510 := 0]
+    data[, importToProductionRatio :=
+             Value_measuredElement_5610/Value_measuredElement_5510]
+    data[, scaledTimePointYears := timePointYears - 1960]
+    data[is.na(fromNationalFbs), fromNationalFbs := 0]
 
     ## NOTE (Klaus): GDP over 25000 PPP are truncated and assume it does
     ##               not have any relevant effects on the changes in losses.
@@ -183,22 +208,22 @@ preEstimationProcessing = function(data){
 
     ## NOTE (Klaus): Assume the food group level of meat is the same as
     ##               meat and fishes.
-    levels(data$foodgroup) =
+    levels(data$foodGroupName) =
         with(data,
-             ifelse(levels(foodgroup) == "meat", "meat and fish",
-                    levels(foodgroup)))
+             ifelse(levels(foodGroupName) == "meat", "meat and fish",
+                    levels(foodGroupName)))
 
     data
 }
 
-preEstimationProcessing(data = rawData)
+preEstimationProcessing(data = finalLossData)
 
 
 ## Function to create the desired estimation sample
 createEstimationSample = function(data){
     ## NOTE (Michael): This is hard coded selection by Klaus
     data[timePointYears > 1969 & 
-         importProductionRatio < 1 &
+         importToProductionRatio < 1 &
          lossRatio != 0 &
          geographicAreaM49 != "170" &
          foodGeneralGroup == "primary" &
@@ -213,10 +238,11 @@ lossRegression = function(data){
     ## REGESSION (1): Item-specific dummies
 
     itemSpecificLoss.lm =
-        lm(I(log(ratio+0.05)) ~ itemname + lossClassRegion + time +
-           foodPerishableGroup + pavedroads + pavedroads:foodPerishableGroup +
-           I(log(gdp)) + I(log(gdp)^2) + I(log(gdp)):foodPerishableGroup +
-           I(log(gdp)^2):foodPerishableGroup + newfbs, data = data)
+        lm(I(log(lossRatio+0.05)) ~ measuredItemCPC + lossRegionClass +
+           scaledTimePointYears + foodPerishableGroup + sharePavedRoad +
+           sharePavedRoad:foodPerishableGroup + I(log(gdp)) + I(log(gdp)^2) +
+           I(log(gdp)):foodPerishableGroup + I(log(gdp)^2):foodPerishableGroup +
+           fromNationalFbs, data = data)
 
 
     ## REGESSION (2): No item-specific dummies.
@@ -225,25 +251,23 @@ lossRegression = function(data){
     ## for which no (or very few) observations are available.
     ##
     ## Use item group-specific dummies. (Both, item and group dummies,
-    ## cannot be used at the same time.)
+    ## cannot be used at the same scaledTimePointYears.)
 
     foodGroupLoss.lm =
-        lm(I(log(ratio + 0.05)) ~ foodgroup + lossClassRegion + time +
-           foodPerishableGroup + pavedroads + pavedroads:foodPerishableGroup +
-           I(log(gdp)) + I(log(gdp)^2) + I(log(gdp)):foodPerishableGroup +
-           I(log(gdp)^2):foodPerishableGroup + newfbs, data = data)
+        lm(I(log(lossRatio + 0.05)) ~ foodGroupName + lossRegionClass +
+           scaledTimePointYears + foodPerishableGroup + sharePavedRoad +
+           sharePavedRoad:foodPerishableGroup + I(log(gdp)) + I(log(gdp)^2) +
+           I(log(gdp)):foodPerishableGroup + I(log(gdp)^2):foodPerishableGroup +
+           fromNationalFbs, data = data)
 
     list(itemSpecificModel = itemSpecificLoss.lm,
          foodGroupModel = foodGroupLoss.lm)
 }
 
-
 ## Build the model
 lossModels =
-    rawData %>%
-    defineFoodGroups(data = ., foodGroup = "foodgroupn") %>%
-    defineLossRegionClassification(unsdSubRegion = "unsubregionname",
-                                   areaName = "areaname") %>%
+    finalLossData %>%
+    calculateLossRatio %>%
     preEstimationProcessing %>%
     createEstimationSample %>%
     lossRegression

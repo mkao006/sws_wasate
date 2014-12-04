@@ -115,7 +115,7 @@ itemMapping = GetTableData(schemaName = "ess", tableName = "fcl_2_cpc")
 setnames(itemMapping,
          old = c("fcl", "cpc"),
          new = c("measuredItemFS", "measuredItemCPC"))
-## This is a hack since there is one cpc to multiple fs item
+## WARNING (Michael): This is a hack since there is one cpc to multiple fs item
 itemMapping[, measuredItemFS := as.numeric(measuredItemFS)]
 itemMapping = itemMapping[!measuredItemFS %in% c("0067", "0068"), ]
 

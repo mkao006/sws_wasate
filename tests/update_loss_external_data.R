@@ -10,6 +10,7 @@ library(FAOSTAT)
 library(data.table)
 library(magrittr)
 library(faosws)
+library(zoo)
 
 ## TODO (Michael): Need to check with Nick how flexible is the
 ##                 expansion of the adhoc dataset.
@@ -70,7 +71,36 @@ getWorldBankGeneralData = function(indicator, name){
              old = c("FAOST_CODE", "ISO2_WB_CODE", "Year", "Country"),
              new = c("geographicAreaFS", "geographicAreaISO2WB", "timePointYears",
                  "geographicAreaNameISO2WB"))
+    setkeyv(translated.dt, c("geographicAreaFS", "timePointYears"))
     translated.dt
+}
+
+naiveImputeWorldBankGeneralData = function(data, indicator){
+
+    ## NOTE (Michael): This is just linear interpolation followed by first/last
+    ##                 observation carried
+    naiveImputation = function (x){
+
+        nobserved = length(na.omit(x))
+        n = length(x)
+        type =
+            ifelse(nobserved == 0, "none",
+                   ifelse(nobserved ==  1, "repeat", "naive"))
+        switch(type, none = {
+            tmp = rep(NA, n)
+        }, `repeat` = {
+            tmp = rep(na.omit(x), n)
+        }, naive = {
+            tmp = na.locf(na.locf(na.approx(x, na.rm = FALSE), na.rm = FALSE), 
+                na.rm = FALSE, fromLast = TRUE)
+        })
+        as.numeric(tmp)
+    }
+
+    data[, `:=`(c(indicator),
+                lapply(data[, indicator, with = FALSE], naiveImputation)),
+         by = "geographicAreaM49"]
+    data
 }
 
 
@@ -99,20 +129,19 @@ SaveWorldBankGeneralWBData = function(data){
     NULL
 }
 
-
+## TODO (Michael): Check the imputation
 worldBankGeneralData =
     getWorldBankGeneralData(indicator = requiredIndicator,
                             name = requiredIndicatorName) %>%
-    translateFStoM49 %T>%
+    translateFStoM49 %>%
+    naiveImputeWorldBankGeneralData(data = .,
+                                    indicator = requiredIndicatorName) %T>%
     SaveWorldBankGeneralWBData
-                            
 
 
 ## TODO (Michael): Need the mapping from faostat to M49 loaded in the
 ##                 GetMapping for the translation before saving into
 ##                 the data. Better if a wbiso2 mapping exists.
-##
-## TODO (Michael): Imputation is required for these data.
 
 
 

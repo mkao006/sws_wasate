@@ -15,9 +15,40 @@ itemVar = "measuredItemCPC"
 elementVar = "measuredElement"
 requiredElements = c("5510", "5610", "5712", "5015")
 names(requiredElements) = c("production", "import", "stockWithdrawl", "loss")
+oldItems =
+    c("0111", "23110", "39120.01", "23710", "0113", "23162",
+      "23161.01", "23161.02", "23161.03", "0115", "24310.01", "0112",
+      "23120.03", "39120.04", "0116", "0117", "0118", "0114", "01192",
+      "01194", "01191", "01199.02", "01199.90", "01510", "23220.05",
+      "01530", "01520", "23170.01", "01591", "01550", "01540", "01599",
+      "01802", "01801", "23510", "23511.02", "23520", "23540", "23210.04",
+      "01701", "01702", "01705", "01703", "01706", "01707", "01704",
+      "01709.01", "01709.02", "01709.90", "01377", "01372", "01373",
+      "01371", "01376", "01374", "01379.90", "0141", "0142", "21421",
+      "01460", "01492", "01491.01", "01450", "2167", "F0262", "01445",
+      "21631.01", "01443", "01444", "01442", "01448", "01921.01", "0143",
+      "01441", "01449.90", "21691.90", "01212", "01216", "01211", "01214",
+      "01215", "01234", "01213", "01235", "01232", "01231", "01253.01",
+      "01253.02", "01252", "01254", "01241.02", "01242", "01243", "01251",
+      "01290.01", "01270", "01290.90", "F0472", "F0475", "01312", "01313",
+      "01323", "01324", "01322", "01321", "01329", "01341", "01342.01",
+      "01342.02", "01343", "01344.01", "01344.02", "01345", "01346",
+      "01354", "01353.01", "01351.01", "01351.02", "01355.01", "01355.02",
+      "01355.90", "01330", "24212.02", "01221", "01229", "01315", "01316",
+      "01311", "01318", "01352", "01317", "01319", "01359.90", "21419.05",
+      "21439.9", "F0623", "01911", "01919.01", "01610", "01640", "02111",
+      "21111.01", "21151", "21512", "21111.02", "02211", "22241.01",
+      "22110.02", "22221.01", "22251.01", "22130.03", "22251.04", "22290",
+      "02112", "02122", "21115", "02291", "02123", "21116", "21156",
+      "02292", "02140", "21113.01", "21153", "21113.02", "21511.02",
+      "02151", "21121", "0231", "02154", "02153", "02152", "0232", "02131",
+      "02132", "02133", "02121.01", "02191", "21117.02", "21170.02",
+      "21170.93", "02199.20")
+requiredItems = oldItems[1:30]
 valuePrefix = "Value_measuredElement_"
 flagObsPrefix = "flagObservationStatus_measuredElement_"
 flagMethodPrefix = "flagMethod_measuredElement_"
+
 
 ## Set up testing environments
 if(Sys.getenv("USER") == "mk"){
@@ -78,18 +109,12 @@ getLossData = function(){
                     dataset = "agriculture",
                     dimension = "geographicAreaM49")
 
-    ## NOTE (Michael): This is just a test, need to get Nick to
-    ##                 develop a better hierachical system.
-    cerealTree =
-        adjacent2edge(GetCodeTree(domain = "agriculture",
-                                  dataset = "agriculture",
-                                  dimension = "measuredItemCPC",
-                                  roots = "011"))
+
     dimensions =
         list(
             Dimension(name = "geographicAreaM49",
                       keys = allCountryCodesTable[type == "country", code]),
-            Dimension(name = "measuredItemCPC", keys = cerealTree$children),
+            Dimension(name = "measuredItemCPC", keys = requiredItems),
             Dimension(name = "measuredElement", keys = unname(requiredElements)),
             Dimension(name = "timePointYears", keys = as.character(1969:2013))
         )
@@ -291,12 +316,12 @@ trainPredictData =
     preEstimationProcessing %>%
     splitLossData
 
+
+
 ## Estimate the model and then make the prediction
 predictedData =
     trainPredictData$estimationData %>%
-    lossRegression %>%
-    predict(object = .[[1]], newdata = trainPredictData$predictionData)
-
+    lossRegression
 
 
 

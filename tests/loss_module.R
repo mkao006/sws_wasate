@@ -143,6 +143,47 @@ getLossData = function(){
     query
 }
 
+getTradeData = function()
+    ## Set up the query
+    ##
+    ## NOTE (Michael): The year is set by Klaus
+    allCountryCodesTable =
+        GetCodeList(domain = "agriculture",
+                    dataset = "agriculture",
+                    dimension = "geographicAreaM49")
+
+    dimensions =
+        list(
+            Dimension(name = "geographicAreaM49",
+                      keys = allCountryCodesTable[type == "country", code]),
+            Dimension(name = "measuredItemCPC", keys = requiredItems),
+            Dimension(name = "measuredElement", keys = "5610"),
+            Dimension(name = "timePointYears", keys = as.character(1969:2013))
+        )
+
+    newDataKey =
+        DatasetKey(domain = "trade",
+                   dataset = "total_trade",
+                   dimensions = dimensions)
+
+    newPivot = c(
+        Pivoting(code = areaVar, ascending = TRUE),
+        Pivoting(code = itemVar, ascending = TRUE),
+        Pivoting(code = yearVar, ascending = FALSE),
+        Pivoting(code = elementVar, ascending = TRUE)
+    )
+
+    ## Query the data
+    query = GetData(
+        key = newDataKey,
+        flags = TRUE,
+        normalized = FALSE,
+        pivoting = newPivot
+    )
+    query[, timePointYears := as.numeric(timePointYears)]
+    query
+}
+
 
 ## Function to merge the national fbs data to the loss data
 mergeNationalFbs = function(lossData, nationalFbs){
@@ -329,4 +370,3 @@ predictedData =
 ## Check the model
 lossModel = lossRegression(trainPredictData$estimationData)
 lapply(lossModels, summary)
-

@@ -15,8 +15,8 @@ library(zoo)
 ## TODO (Michael): Need to check with Nick how flexible is the
 ##                 expansion of the adhoc dataset.
 
-requiredIndicator = c("NY.GDP.MKTP.PP.KD", "IS.ROD.PAVE.ZS")
-requiredIndicatorName = c("gdp", "sharePavedRoad")
+requiredIndicator = c("NY.GDP.PCAP.KD", "NY.GDP.MKTP.PP.KD", "IS.ROD.PAVE.ZS")
+requiredIndicatorName = c("gdpPerCapita", "gdpPPP", "sharePavedRoad")
 
 
 ## The country list for using the WB climate API
@@ -126,7 +126,8 @@ translateFStoM49 = function(data){
 ## Need to wait for Nick to set up the data base
 SaveWorldBankGeneralWBData = function(data){
     ## SaveData(domain = , dataset = , data = data)
-    NULL
+    write.csv(data, file = "data/worldBankGeneralData.csv",
+              row.names = FALSE, na = "")
 }
 
 ## TODO (Michael): Check the imputation
@@ -222,8 +223,11 @@ mergeWorldBankClimateData = function(dataList){
 }
 
 SaveWorldBankClimateData = function(data){
+    ## NOTE (Michael): This should be changed to save back by the R API
     ## SaveData(domain = , dataset = , data = data)
-    NULL
+
+    write.csv(data, file = "data/worldBankClimateData.csv",
+              row.names = FALSE, na = "")
 }
 
 worldBankClimateData =

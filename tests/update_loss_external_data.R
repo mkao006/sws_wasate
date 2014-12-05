@@ -140,11 +140,6 @@ worldBankGeneralData =
     SaveWorldBankGeneralWBData
 
 
-## TODO (Michael): Need the mapping from faostat to M49 loaded in the
-##                 GetMapping for the translation before saving into
-##                 the data. Better if a wbiso2 mapping exists.
-
-
 
 ## Download World Bank climate data
 ## ---------------------------------------------------------------------

@@ -65,7 +65,7 @@ getLossRegionClass = function(){
 getNationalFbs = function(){
     ## NOTE (Michael): This will be replaced by the GetMapping
     ##                 function when loaded into the data base.
-    data.table(read.csv(file = "data/finalNationalFbs.csv"))
+    data.table(read.csv(file = "data/nationalFBS.csv"))
 }
 
 ## Function to load the data required for loss estimation
@@ -209,9 +209,10 @@ preEstimationProcessing = function(data){
     data[, scaledTimePointYears := timePointYears - 1960]
     data[is.na(fromNationalFbs), fromNationalFbs := 0]
 
-    ## NOTE (Klaus): GDP over 25000 PPP are truncated and assume it does
-    ##               not have any relevant effects on the changes in losses.
-    data[gdp > 25000, gdp := 25000]
+    ## NOTE (Klaus): GDP per capita over 25000 are truncated and
+    ##               assume it does not have any relevant effects on
+    ##               the changes in losses.
+    data[gdpPerCapita > 25000, gdpPerCapita := 25000]
 
     ## NOTE (Klaus): Assume the food group level of meat is the same as
     ##               meat and fishes.
@@ -235,7 +236,7 @@ splitLossData = function(data, estimationSubset){
                              lossRatio != 0 &
                              geographicAreaM49 != "170" &
                              foodGeneralGroup == "primary" &
-                             !is.na(gdp) &
+                             !is.na(gdpPerCapita) &
                              !is.na(sharePavedRoad)))
    
     estimationSubsetIndex = eval(substitute(estimationSubset), data)
@@ -256,8 +257,9 @@ lossRegression = function(data){
     itemSpecificLoss.lm =
         lm(I(log(lossRatio+0.05)) ~ measuredItemCPC + lossRegionClass +
            scaledTimePointYears + foodPerishableGroup + sharePavedRoad +
-           sharePavedRoad:foodPerishableGroup + I(log(gdp)) + I(log(gdp)^2) +
-           I(log(gdp)):foodPerishableGroup + I(log(gdp)^2):foodPerishableGroup +
+           sharePavedRoad:foodPerishableGroup + I(log(gdpPerCapita)) +
+           I(log(gdpPerCapita)^2) + I(log(gdpPerCapita)):foodPerishableGroup +
+           I(log(gdpPerCapita)^2):foodPerishableGroup +
            fromNationalFbs, data = data)
 
 
@@ -272,8 +274,9 @@ lossRegression = function(data){
     foodGroupLoss.lm =
         lm(I(log(lossRatio + 0.05)) ~ foodGroupName + lossRegionClass +
            scaledTimePointYears + foodPerishableGroup + sharePavedRoad +
-           sharePavedRoad:foodPerishableGroup + I(log(gdp)) + I(log(gdp)^2) +
-           I(log(gdp)):foodPerishableGroup + I(log(gdp)^2):foodPerishableGroup +
+           sharePavedRoad:foodPerishableGroup + I(log(gdpPerCapita)) +
+           I(log(gdpPerCapita)^2) + I(log(gdpPerCapita)):foodPerishableGroup +
+           I(log(gdpPerCapita)^2):foodPerishableGroup +
            fromNationalFbs, data = data)
 
     list(itemSpecificModel = itemSpecificLoss.lm,
@@ -300,3 +303,4 @@ predictedData =
 ## Check the model
 lossModel = lossRegression(trainPredictData$estimationData)
 lapply(lossModels, summary)
+

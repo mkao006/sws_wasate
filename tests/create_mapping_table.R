@@ -9,7 +9,7 @@ library(faosws)
 
 ## Assuming that we have the data ready
 rawData = data.table(
-    subset(read.dta("./Dataset for Estimation and Prediction in R.dta"),
+    subset(read.dta("./data_original/Dataset for Estimation and Prediction in R.dta"),
         select = c(itemcode, itemname, areacode, areaname, newregion, year,
             foodgroup, foodgroupn, unsubregionname, continentname,
             pavedroads, gdp, ratio, num_61, num_51, newfbs)))

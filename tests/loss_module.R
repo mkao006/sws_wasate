@@ -7,6 +7,7 @@ suppressMessages({
     library(magrittr)    
 })
 
+## Add test comment
 
 ## Setting up variables
 areaVar = "geographicAreaM49"

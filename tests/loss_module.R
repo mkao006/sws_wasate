@@ -1,9 +1,7 @@
 suppressMessages({
     library(faosws)
-    library(faoswsAupus)
     library(faoswsUtil)
     library(data.table)
-    library(foreign)
     library(magrittr)    
 })
 

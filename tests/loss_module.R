@@ -7,7 +7,6 @@ suppressMessages({
     library(magrittr)    
 })
 
-## Add test comment
 
 ## Setting up variables
 areaVar = "geographicAreaM49"
@@ -143,22 +142,35 @@ getLossData = function(){
     query
 }
 
-getTradeData = function()
+getTradeData = function(){
     ## Set up the query
     ##
+
     ## NOTE (Michael): The year is set by Klaus
     allCountryCodesTable =
-        GetCodeList(domain = "agriculture",
-                    dataset = "agriculture",
+        GetCodeList(domain = "trade",
+                    dataset = "total_trade",
                     dimension = "geographicAreaM49")
 
+    cerealTree =
+        adjacent2edge(GetCodeTree(domain = "trade",
+                    dataset = "total_trade",
+                    dimension = "measuredItemHS",
+                    roots = "10"))
+
+    tradeElements =
+        GetCodeList(domain = "trade",
+                    dataset = "total_trade",
+                    dimension = "measuredElementTrade")
+
+    
     dimensions =
         list(
             Dimension(name = "geographicAreaM49",
                       keys = allCountryCodesTable[type == "country", code]),
-            Dimension(name = "measuredItemCPC", keys = requiredItems),
-            Dimension(name = "measuredElement", keys = "5610"),
-            Dimension(name = "timePointYears", keys = as.character(1969:2013))
+            Dimension(name = "measuredItemHS", keys = unique(cerealTree$children)),
+            Dimension(name = "measuredElementTrade", keys = tradeElements[, code]),
+            Dimension(name = "timePointYears", keys = as.character(2000:2013))
         )
 
     newDataKey =
@@ -167,12 +179,12 @@ getTradeData = function()
                    dimensions = dimensions)
 
     newPivot = c(
-        Pivoting(code = areaVar, ascending = TRUE),
-        Pivoting(code = itemVar, ascending = TRUE),
-        Pivoting(code = yearVar, ascending = FALSE),
-        Pivoting(code = elementVar, ascending = TRUE)
+        Pivoting(code = "geographicAreaM49", ascending = TRUE),
+        Pivoting(code = "measuredItemHS", ascending = TRUE),
+        Pivoting(code = "timePointYears", ascending = FALSE),
+        Pivoting(code = "measuredElementTrade", ascending = TRUE)
     )
-
+    
     ## Query the data
     query = GetData(
         key = newDataKey,

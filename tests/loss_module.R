@@ -2,50 +2,11 @@ suppressMessages({
     library(faosws)
     library(faoswsUtil)
     library(data.table)
-    library(magrittr)    
+    library(magrittr)
+    library(pryr)
+    library(biglm)
 })
 
-
-## Setting up variables
-areaVar = "geographicAreaM49"
-yearVar = "timePointYears"
-itemVar = "measuredItemCPC"
-elementVar = "measuredElement"
-requiredElements = c("5510", "5610", "5712", "5015")
-names(requiredElements) = c("production", "import", "stockWithdrawl", "loss")
-oldItems =
-    c("0111", "23110", "39120.01", "23710", "0113", "23162",
-      "23161.01", "23161.02", "23161.03", "0115", "24310.01", "0112",
-      "23120.03", "39120.04", "0116", "0117", "0118", "0114", "01192",
-      "01194", "01191", "01199.02", "01199.90", "01510", "23220.05",
-      "01530", "01520", "23170.01", "01591", "01550", "01540", "01599",
-      "01802", "01801", "23510", "23511.02", "23520", "23540", "23210.04",
-      "01701", "01702", "01705", "01703", "01706", "01707", "01704",
-      "01709.01", "01709.02", "01709.90", "01377", "01372", "01373",
-      "01371", "01376", "01374", "01379.90", "0141", "0142", "21421",
-      "01460", "01492", "01491.01", "01450", "2167", "F0262", "01445",
-      "21631.01", "01443", "01444", "01442", "01448", "01921.01", "0143",
-      "01441", "01449.90", "21691.90", "01212", "01216", "01211", "01214",
-      "01215", "01234", "01213", "01235", "01232", "01231", "01253.01",
-      "01253.02", "01252", "01254", "01241.02", "01242", "01243", "01251",
-      "01290.01", "01270", "01290.90", "F0472", "F0475", "01312", "01313",
-      "01323", "01324", "01322", "01321", "01329", "01341", "01342.01",
-      "01342.02", "01343", "01344.01", "01344.02", "01345", "01346",
-      "01354", "01353.01", "01351.01", "01351.02", "01355.01", "01355.02",
-      "01355.90", "01330", "24212.02", "01221", "01229", "01315", "01316",
-      "01311", "01318", "01352", "01317", "01319", "01359.90", "21419.05",
-      "21439.9", "F0623", "01911", "01919.01", "01610", "01640", "02111",
-      "21111.01", "21151", "21512", "21111.02", "02211", "22241.01",
-      "22110.02", "22221.01", "22251.01", "22130.03", "22251.04", "22290",
-      "02112", "02122", "21115", "02291", "02123", "21116", "21156",
-      "02292", "02140", "21113.01", "21153", "21113.02", "21511.02",
-      "02151", "21121", "0231", "02154", "02153", "02152", "0232", "02131",
-      "02132", "02133", "02121.01", "02191", "21117.02", "21170.02",
-      "21170.93", "02199.20")
-requiredItems = oldItems[1:30]
-valuePrefix = "Value_measuredElement_"
-flagObsPrefix = "flagObservationStatus_measuredElement_"
-flagMethodPrefix = "flagMethod_measuredElement_"
 
 
 ## Set up testing environments
@@ -56,6 +17,18 @@ if(Sys.getenv("USER") == "mk"){
         ## token = "7fe7cbec-2346-46de-9a3a-8437eca18e2a"
         )
 }
+
+## Setting up variables
+areaVar = "geographicAreaM49"
+yearVar = "timePointYears"
+itemVar = "measuredItemCPC"
+elementVar = "measuredElement"
+requiredElements = c("5510", "5610", "5712", "5015")
+names(requiredElements) = c("production", "import", "stockWithdrawl", "loss")
+requiredItems = GetCodeList("agriculture", "agriculture", "measuredItemCPC")$code
+valuePrefix = "Value_measuredElement_"
+flagObsPrefix = "flagObservationStatus_measuredElement_"
+flagMethodPrefix = "flagMethod_measuredElement_"
 
 
 
@@ -194,6 +167,8 @@ getTradeData = function(){
     query
 }
 
+getStockVariationData = function(){}
+
 
 ## Function to merge the national fbs data to the loss data
 mergeNationalFbs = function(lossData, nationalFbs){
@@ -217,22 +192,6 @@ mergeAllLossData = function(lossData, lossExternalData, lossFoodGroup,
 
 
 
-## TODO (Michael): Need more comprehensive list of food group, there
-##                 are missing items.
-## WARNING (Michael): This is entirely a hack since the classification
-##                    of certain commodities were missing.
-hackLossGroupRegion = function(data){
-    foodGroupVariable = grep("food", colnames(data), value = TRUE)
-    foodGroupVariable = foodGroupVariable[foodGroupVariable != "foodGroup"]
-    data[, `:=`(c(foodGroupVariable),
-                lapply(data[, foodGroupVariable, with = FALSE],
-                       FUN = function(x){
-                           x[is.na(x)] = "unclassified"
-                       }))]
-    data[is.na(lossRegionClass), lossRegionClass := "unclassified"]
-    data
-}
-
 
 
 ## TODO (Michael): Need to check the missing values.
@@ -243,6 +202,44 @@ finalLossData =
                      lossExternalData = getLossExternalData(),
                      lossFoodGroup = getLossFoodGroup(),
                      lossRegionClass = getLossRegionClass())
+
+
+## HACK (Michael): Fill in non-classified food group and region
+fillUnclassifiedFoodGroup = function(data,
+    foodGroupClassification = c("foodGroupName", "foodGeneralGroup",
+        "foodPerishableGroup")){
+    sapply(foodGroupClassification,
+           FUN = function(x){
+               data[is.na(data[[x]]), `:=`(c(x), "unclassified")]
+               invisible()
+           }
+           )
+    data
+}
+
+fillUnclassifiedRegion = function(data, regionClassification = "lossRegionClass"){
+    sapply(regionClassification,
+           FUN = function(x){
+               data[is.na(data[[x]]), `:=`(c(x), "unclassified")]
+               invisible()
+           }
+           )
+    data    
+}
+
+dataHack = function(data){
+    ## HACK (Michael): This is a hack to simulate trade data
+    data[, Value_measuredElement_5610 :=
+             abs(rnorm(.N, Value_measuredElement_5510,
+                       sd(Value_measuredElement_5510, na.rm = TRUE))),
+         by = c("geographicAreaM49", "measuredItemCPC")]
+    ## HACK (Michael): Since trade and stock variation data are not
+    ##                 available, we simulate the loss rate data as well.
+    data[sample(1:NROW(data), NROW(data) * 0.5),
+         lossRatio := runif(.N, min = 0.1, max = 0.9)]
+    data[!is.finite(lossRatio) | lossRatio < 0, lossRatio := NA]
+    data
+}
 
 
 ## Function to calculate the ratio
@@ -256,12 +253,16 @@ calculateLossRatio = function(data,
     lossValue = paste0(valuePrefix, requiredElements["loss"])){
 
     data[data[[stockWithdrawlValue]] >= 0,
-         lossRatio := .SD[[lossValue]]/(.SD[[productionValue]] +
-                                        .SD[[importValue]] +
-                                        .SD[[stockWithdrawlValue]])]
+         lossBase := 
+             rowSums(.SD[, c(productionValue, importValue, stockWithdrawlValue),
+                         with = FALSE],
+                     na.rm = TRUE)]
     data[data[[stockWithdrawlValue]] < 0,
-         lossRatio := .SD[[lossValue]]/(.SD[[productionValue]] +
-                                        .SD[[importValue]])]
+         lossBase := 
+             rowSums(.SD[, c(productionValue, importValue), with = FALSE],
+                     na.rm = TRUE)]
+    
+    data[, lossRatio := .SD[[lossValue]]/lossBase]
     data
 }
 
@@ -274,7 +275,7 @@ preEstimationProcessing = function(data){
     ## Convert variables to factor for modelling
     factorVariables = c("geographicAreaM49", "measuredItemCPC", "foodGroupName",
                   "foodGeneralGroup", "foodPerishableGroup", "lossRegionClass")
-    data[, `:=`(c(factorVariables),
+    data[, `:=`(c(paste0(factorVariables, "Factor")),
                 lapply(data[, factorVariables, with = FALSE], as.factor))]
     
 
@@ -282,7 +283,7 @@ preEstimationProcessing = function(data){
     data[is.na(Value_measuredElement_5610), Value_measuredElement_5610 := 0]
     data[is.na(Value_measuredElement_5510), Value_measuredElement_5510 := 0]
     data[, importToProductionRatio :=
-             Value_measuredElement_5610/Value_measuredElement_5510]
+             computeRatio(Value_measuredElement_5610, Value_measuredElement_5510)]
     data[, scaledTimePointYears := timePointYears - 1960]
     data[is.na(fromNationalFbs), fromNationalFbs := 0]
 
@@ -293,10 +294,10 @@ preEstimationProcessing = function(data){
 
     ## NOTE (Klaus): Assume the food group level of meat is the same as
     ##               meat and fishes.
-    levels(data$foodGroupName) =
+    levels(data$foodGroupNameFactor) =
         with(data,
-             ifelse(levels(foodGroupName) == "meat", "meat and fish",
-                    levels(foodGroupName)))
+             ifelse(levels(foodGroupNameFactor) == "meat", "meat and fish",
+                    levels(foodGroupNameFactor)))
 
     data
 }
@@ -327,17 +328,18 @@ splitLossData = function(data, estimationSubset){
 
 
 ## Function to estimate the loss regression
-lossRegression = function(data){
+lossRegression = function(estimationData){
 
     ## REGESSION (1): Item-specific dummies
 
     itemSpecificLoss.lm =
-        lm(I(log(lossRatio+0.05)) ~ measuredItemCPC + lossRegionClass +
-           scaledTimePointYears + foodPerishableGroup + sharePavedRoad +
-           sharePavedRoad:foodPerishableGroup + I(log(gdpPerCapita)) +
-           I(log(gdpPerCapita)^2) + I(log(gdpPerCapita)):foodPerishableGroup +
-           I(log(gdpPerCapita)^2):foodPerishableGroup +
-           fromNationalFbs, data = data)
+        lm(I(log(lossRatio+0.05)) ~ measuredItemCPCFactor + lossRegionClassFactor +
+           scaledTimePointYears + foodPerishableGroupFactor + sharePavedRoad +
+           sharePavedRoad:foodPerishableGroupFactor + I(log(gdpPerCapita)) +
+           I(log(gdpPerCapita)^2) +
+           I(log(gdpPerCapita)):foodPerishableGroupFactor +
+           I(log(gdpPerCapita)^2):foodPerishableGroupFactor +
+           fromNationalFbs, data = estimationData)
 
 
     ## REGESSION (2): No item-specific dummies.
@@ -349,34 +351,51 @@ lossRegression = function(data){
     ## cannot be used at the same scaledTimePointYears.)
 
     foodGroupLoss.lm =
-        lm(I(log(lossRatio + 0.05)) ~ foodGroupName + lossRegionClass +
-           scaledTimePointYears + foodPerishableGroup + sharePavedRoad +
-           sharePavedRoad:foodPerishableGroup + I(log(gdpPerCapita)) +
-           I(log(gdpPerCapita)^2) + I(log(gdpPerCapita)):foodPerishableGroup +
-           I(log(gdpPerCapita)^2):foodPerishableGroup +
-           fromNationalFbs, data = data)
+        lm(I(log(lossRatio + 0.05)) ~ foodGroupNameFactor + lossRegionClassFactor +
+           scaledTimePointYears + foodPerishableGroupFactor + sharePavedRoad +
+           sharePavedRoad:foodPerishableGroupFactor + I(log(gdpPerCapita)) +
+           I(log(gdpPerCapita)^2) +
+           I(log(gdpPerCapita)):foodPerishableGroupFactor +
+           I(log(gdpPerCapita)^2):foodPerishableGroupFactor +
+           fromNationalFbs, data = estimationData)
 
     list(itemSpecificModel = itemSpecificLoss.lm,
          foodGroupModel = foodGroupLoss.lm)
 }
 
+
+
+lossModelPrediction = function(model, predictionData, lossRatio){
+    lapply(model, function(x){
+        missingLossRatio = which(is.na(predictionData[[lossRatio]]))
+        predictionData[missingLossRatio,
+                       `:=`(c(lossRatio),
+                            exp(predict(x, newdata = .SD)) - 0.05)]
+    })
+    predictionData[, `:=`(c(paste0(valuePrefix, requiredElements[["loss"]])),
+                lossBase * lossRatio)]
+    predictionData
+}
+           
+
+
 ## Build the data
 trainPredictData =
     finalLossData %>%
-    hackLossGroupRegion %>% 
+    fillUnclassifiedFoodGroup %>%
+    fillUnclassifiedRegion %>%
     calculateLossRatio %>%
-    preEstimationProcessing %>%
-    splitLossData
-
+    dataHack %>%
+    preEstimationProcessing
 
 
 ## Estimate the model and then make the prediction
-predictedData =
+lossModel =
     trainPredictData$estimationData %>%
     lossRegression
 
-
-
-## Check the model
-lossModel = lossRegression(trainPredictData$estimationData)
-lapply(lossModels, summary)
+## Make imputation
+imputedData =
+    lossModelPrediction(model = lossModel, trainPredictData$predictionData,
+                        lossRatio = "lossRatio")
+    

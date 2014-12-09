@@ -299,7 +299,7 @@ preEstimationProcessing = function(data){
              ifelse(levels(foodGroupNameFactor) == "meat", "meat and fish",
                     levels(foodGroupNameFactor)))
 
-    data
+    data[foodGeneralGroup == "primary", ]
 }
 
 
@@ -364,13 +364,12 @@ lossRegression = function(estimationData){
 }
 
 
-
 lossModelPrediction = function(model, predictionData, lossRatio){
     lapply(model, function(x){
         missingLossRatio = which(is.na(predictionData[[lossRatio]]))
         predictionData[missingLossRatio,
                        `:=`(c(lossRatio),
-                            exp(predict(x, newdata = .SD)) - 0.05)]
+                            list(c(exp(predict(x, newdata = .SD)) - 0.05)))]
     })
     predictionData[, `:=`(c(paste0(valuePrefix, requiredElements[["loss"]])),
                 lossBase * lossRatio)]
@@ -378,6 +377,20 @@ lossModelPrediction = function(model, predictionData, lossRatio){
 }
            
 
+selectRequiredVariable = function(data){
+    data[, list(geographicAreaM49, measuredItemCPC, timePointYears,
+                Value_measuredElement_5015, fromNationalFbs, gdpPerCapita,
+                sharePavedRoad, lossBase, lossRatio, geographicAreaM49Factor,
+                measuredItemCPCFactor, foodGroupNameFactor, foodGeneralGroupFactor,
+                foodPerishableGroupFactor, lossRegionClassFactor,
+                importToProductionRatio, scaledTimePointYears)]
+}
+                
+
+
+
+save(finalLossData, file = "finalLossData.RData")
+load("finalLossData.RData")
 
 ## Build the data
 trainPredictData =
@@ -386,16 +399,16 @@ trainPredictData =
     fillUnclassifiedRegion %>%
     calculateLossRatio %>%
     dataHack %>%
-    preEstimationProcessing
+    preEstimationProcessing %>%
+    selectRequiredVariable
 
 
 ## Estimate the model and then make the prediction
 lossModel =
-    trainPredictData$estimationData %>%
+    trainPredictData %>%
     lossRegression
 
 ## Make imputation
 imputedData =
-    lossModelPrediction(model = lossModel, trainPredictData$predictionData,
+    lossModelPrediction(model = lossModel, trainPredictData,
                         lossRatio = "lossRatio")
-    

@@ -67,7 +67,7 @@ getLossRegionClass = function(){
 getNationalFbs = function(){
     ## NOTE (Michael): This will be replaced by the GetMapping
     ##                 function when loaded into the data base.
-    data.table(read.csv(file = "data/nationalFBS.csv"))
+    data.table(read.csv(file = "data/nationalFbs.csv"))
 }
 
 ## Function to load the data required for loss estimation
@@ -299,7 +299,7 @@ preEstimationProcessing = function(data){
              ifelse(levels(foodGroupNameFactor) == "meat", "meat and fish",
                     levels(foodGroupNameFactor)))
 
-    data[foodGeneralGroup == "primary", ]
+    data
 }
 
 
@@ -365,32 +365,31 @@ lossRegression = function(estimationData){
 
 
 lossModelPrediction = function(model, predictionData, lossRatio){
+    imputedData = copy(predictionData)
     lapply(model, function(x){
-        missingLossRatio = which(is.na(predictionData[[lossRatio]]))
-        predictionData[missingLossRatio,
+        missingLossRatio = which(is.na(imputedData[[lossRatio]]))
+        imputedData[missingLossRatio,
                        `:=`(c(lossRatio),
                             list(c(exp(predict(x, newdata = .SD)) - 0.05)))]
     })
-    predictionData[, `:=`(c(paste0(valuePrefix, requiredElements[["loss"]])),
+    imputedData[, `:=`(c(paste0(valuePrefix, requiredElements[["loss"]])),
                 lossBase * lossRatio)]
-    predictionData
+    imputedData
 }
            
 
 selectRequiredVariable = function(data){
-    data[, list(geographicAreaM49, measuredItemCPC, timePointYears,
-                Value_measuredElement_5015, fromNationalFbs, gdpPerCapita,
-                sharePavedRoad, lossBase, lossRatio, geographicAreaM49Factor,
-                measuredItemCPCFactor, foodGroupNameFactor, foodGeneralGroupFactor,
-                foodPerishableGroupFactor, lossRegionClassFactor,
-                importToProductionRatio, scaledTimePointYears)]
+    data[foodGeneralGroup == "primary",
+         list(geographicAreaM49, measuredItemCPC, timePointYears,
+              Value_measuredElement_5015, fromNationalFbs, gdpPerCapita,
+              sharePavedRoad, lossBase, lossRatio, geographicAreaM49Factor,
+              measuredItemCPCFactor, foodGroupNameFactor, foodGeneralGroupFactor,
+              foodPerishableGroupFactor, lossRegionClassFactor,
+              importToProductionRatio, scaledTimePointYears)]
 }
                 
-
-
-
-save(finalLossData, file = "finalLossData.RData")
-load("finalLossData.RData")
+## save(finalLossData, file = "finalLossData.RData")
+## load("finalLossData.RData")
 
 ## Build the data
 trainPredictData =
@@ -410,5 +409,6 @@ lossModel =
 
 ## Make imputation
 imputedData =
-    lossModelPrediction(model = lossModel, trainPredictData,
+    lossModelPrediction(model = lossModel,
+                        predictionData = trainPredictData,
                         lossRatio = "lossRatio")

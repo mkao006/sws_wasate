@@ -33,7 +33,7 @@ translateFStoM49 = function(data){
 
 ## Load new national FBS
 ## ---------------------------------------------------------------------
-nationalFbs = data.table(read.csv(file = "newNationalFbs.csv"))
+nationalFbs = data.table(read.csv(file = "data_original/newNationalFbs.csv"))
 translatedNationalFbs =
     translateFStoM49(nationalFbs)
 itemMapping = GetTableData(schemaName = "ess", tableName = "fcl_2_cpc")
@@ -44,4 +44,4 @@ mapped = merge(translatedNationalFbs, itemMapping, all.x = TRUE,
     by = "measuredItemFS")
 mapped[, `:=`(c("measuredItemFS", "geographicAreaFS"), NULL)]
 write.csv(mapped[!is.na(measuredItemCPC), ], file = "data/nationalFbs.csv",
-          row.names = FALSE, na = "")
+          row.names = FALSE, na = "", quote = TRUE)

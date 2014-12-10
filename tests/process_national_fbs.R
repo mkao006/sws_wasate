@@ -33,9 +33,51 @@ translateFStoM49 = function(data){
 
 ## Load new national FBS
 ## ---------------------------------------------------------------------
-nationalFbs = data.table(read.csv(file = "data_original/newNationalFbs.csv"))
+nationalFbs =
+    data.table(read.csv(file = "data_original/NEW_National FBS data.csv"))
+subNationalFbs =
+    subset(nationalFbs,
+           select = c("Country.Code", "year", "Commodity.Code", "Production",
+               "Imports", "Exports", "Stock.variation", "Losses",
+               "Seed", "X.1"),
+           subset = !is.na(Commodity.Code) & Commodity.Code != -1 &
+               !is.na(Country.Code))
+
+## NOTE (Michael): Loss ratio is not loaded since it doesn't have an
+##                 element code, further, they should be able to
+##                 calculated provided production, import and stock
+##                 variation exists.
+setnames(subNationalFbs,
+         old = colnames(subNationalFbs),
+         new = c("geographicAreaFS", "timePointYears", "measuredItemFS",
+             "Value_measuredElement_5510", "Value_measuredElement_5610",
+             "Value_measuredElement_5910", "Value_measuredElement_5712",
+             "Value_measuredElement_5015", "Value_measuredElement_5525",
+              "unitConversion"))
+
+valueColumns = grep("Value", colnames(subNationalFbs), value = TRUE)
+## Convert all value column to numeric
+##
+## NOTE (Michael): The warning is a result of converting "." to
+##                 numeric, the result should be NA nevertheless.
+lapply(valueColumns,
+       FUN = function(x){
+           subNationalFbs[, `:=`(c(x),
+                                 as.numeric(gsub(", ", "", subNationalFbs[[x]])))]
+       })
+
+## Convert everything to tonnes
+subNationalFbs[is.na(unitConversion), unitConversion := 1]
+lapply(valueColumns,
+       FUN = function(x){
+           subNationalFbs[, `:=`(c(x), list(subNationalFbs[[x]] *
+                                      subNationalFbs[["unitConversion"]]))]
+       })
+subNationalFbs[, unitConversion := NULL]
+
+## Translate country and item codes
 translatedNationalFbs =
-    translateFStoM49(nationalFbs)
+    translateFStoM49(subNationalFbs)
 itemMapping = GetTableData(schemaName = "ess", tableName = "fcl_2_cpc")
 itemMapping[, fcl := as.numeric(fcl)]
 setnames(itemMapping, old = c("fcl", "cpc"),
@@ -43,5 +85,7 @@ setnames(itemMapping, old = c("fcl", "cpc"),
 mapped = merge(translatedNationalFbs, itemMapping, all.x = TRUE,
     by = "measuredItemFS")
 mapped[, `:=`(c("measuredItemFS", "geographicAreaFS"), NULL)]
+
+## Save the data back
 write.csv(mapped[!is.na(measuredItemCPC), ], file = "data/nationalFbs.csv",
           row.names = FALSE, na = "", quote = TRUE)

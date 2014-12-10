@@ -31,6 +31,10 @@ flagMethodPrefix = "flagMethod_measuredElement_"
 
 
 
+## Define required functions
+## ---------------------------------------------------------------------
+
+
 ## Function to get the 2 external world bank data sets and merge them
 getLossExternalData = function(){
     ## TODO (Michael): Get the data using R API
@@ -112,6 +116,10 @@ getLossData = function(){
     query
 }
 
+
+## NOTE (Michael): Function to get trade data, however, there are no
+##                 data in the trade domain. Thus the data in this
+##                 example is simulated. See hackData function.
 getTradeData = function(){
     ## Set up the query
     ##
@@ -166,6 +174,9 @@ getTradeData = function(){
     query
 }
 
+
+## This is the function to get stock variation data, however the data
+## does not exist and is simulated.
 getStockVariationData = function(){}
 
 
@@ -213,6 +224,7 @@ fillUnclassifiedRegion = function(data, regionClassification = "lossRegionClass"
     data    
 }
 
+## This function fills in data requirments which are not currently in the data
 dataHack = function(data){
     ## HACK (Michael): This is a hack to simulate trade data
     data[, Value_measuredElement_5610 :=
@@ -230,8 +242,6 @@ dataHack = function(data){
 
 ## Function to calculate the ratio
 ##
-## WARNINGS (Michael): There are infinity and missing values, need to
-##                     check division by zero
 calculateLossRatio = function(data,
     productionValue = paste0(valuePrefix, requiredElements["production"]),
     importValue = paste0(valuePrefix, requiredElements["import"]),
@@ -248,7 +258,7 @@ calculateLossRatio = function(data,
              rowSums(.SD[, c(productionValue, importValue), with = FALSE],
                      na.rm = TRUE)]
     
-    data[, lossRatio := .SD[[lossValue]]/lossBase]
+    data[, lossRatio := computeRatio(.SD[[lossValue]], lossBase)]
     data
 }
 
@@ -290,6 +300,8 @@ preEstimationProcessing = function(data){
 
 
 ## Function to create the desired estimation sample
+##
+## NOTE (Michael): This is currently obsolete
 splitLossData = function(data, estimationSubset){
 
     ## NOTE (Michael): This is hard coded selection by Klaus
@@ -350,6 +362,7 @@ lossRegression = function(estimationData){
 }
 
 
+## Function to take the model and make imputation
 lossModelPrediction = function(model, predictionData, lossRatio){
     imputedData = copy(predictionData)
     lapply(model, function(x){
@@ -363,7 +376,8 @@ lossModelPrediction = function(model, predictionData, lossRatio){
     imputedData
 }
            
-
+## Function to select the required variable and dimension for the
+## estimation of the model.
 selectRequiredVariable = function(data){
     data[foodGeneralGroup == "primary",
          list(geographicAreaM49, measuredItemCPC, timePointYears,
@@ -376,7 +390,7 @@ selectRequiredVariable = function(data){
               importToProductionRatio, scaledTimePointYears)]
 }
                 
-
+## Function to save the data back 
 SaveLossData = function(data){
     saveSelection =
         data[, intersect(colnames(data), colnames(lossData)),
@@ -391,8 +405,8 @@ SaveLossData = function(data){
              normalized = FALSE)
 }
 
-## save(finalLossData, file = "finalLossData.RData")
-## load("finalLossData.RData")
+## The full waste estimation, imputation process.
+## ---------------------------------------------------------------------
 
 ## Build the final data set
 finalLossData =
@@ -436,8 +450,7 @@ lossModel =
 imputedData =
     lossModelPrediction(model = lossModel,
                         predictionData = trainPredictData,
-                        lossRatio = "lossRatio") %>%
-    head(x = .[!is.na(Value_measuredElement_5015), ], n = 1000)
+                        lossRatio = "lossRatio")
 
 ## Save the loss data back
 SaveLossData(imputedData)

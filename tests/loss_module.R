@@ -13,8 +13,7 @@ suppressMessages({
 if(Sys.getenv("USER") == "mk"){
     GetTestEnvironment(
         baseUrl = "https://hqlqasws1.hq.un.fao.org:8181/sws",
-        token = "3f113726-f40e-44b3-b2af-d5f0de77c386"
-        ## token = "7fe7cbec-2346-46de-9a3a-8437eca18e2a"
+        token = "40662c94-ecff-40cf-b2f7-d739bc031411"
         )
 }
 
@@ -172,9 +171,9 @@ getStockVariationData = function(){}
 
 ## Function to merge the national fbs data to the loss data
 mergeNationalFbs = function(lossData, nationalFbs){
-    lossData[, fromNationalFbs := 0]
-    nationalFbs[, fromNationalFbs := 1]
     lossWithNationalFbs = rbind(lossData, nationalFbs, fill = TRUE)
+    lossWithNationalFbs[, fromNationalFbs :=
+                            c(rep(0, NROW(lossData)), rep(1, NROW(nationalFbs)))]
     lossWithNationalFbs
 }
     
@@ -189,19 +188,6 @@ mergeAllLossData = function(lossData, lossExternalData, lossFoodGroup,
            init = lossData
            )
 }
-
-
-
-
-
-## TODO (Michael): Need to check the missing values.
-##
-## Merge everything together
-finalLossData =
-    mergeAllLossData(lossData = mergeNationalFbs(getLossData(), getNationalFbs()),
-                     lossExternalData = getLossExternalData(),
-                     lossFoodGroup = getLossFoodGroup(),
-                     lossRegionClass = getLossRegionClass())
 
 
 ## HACK (Michael): Fill in non-classified food group and region
@@ -381,15 +367,54 @@ lossModelPrediction = function(model, predictionData, lossRatio){
 selectRequiredVariable = function(data){
     data[foodGeneralGroup == "primary",
          list(geographicAreaM49, measuredItemCPC, timePointYears,
-              Value_measuredElement_5015, fromNationalFbs, gdpPerCapita,
+              Value_measuredElement_5015,
+              flagObservationStatus_measuredElement_5015,
+              flagMethod_measuredElement_5015, fromNationalFbs, gdpPerCapita,
               sharePavedRoad, lossBase, lossRatio, geographicAreaM49Factor,
               measuredItemCPCFactor, foodGroupNameFactor, foodGeneralGroupFactor,
               foodPerishableGroupFactor, lossRegionClassFactor,
               importToProductionRatio, scaledTimePointYears)]
 }
                 
+
+SaveLossData = function(data){
+    saveSelection =
+        data[, intersect(colnames(data), colnames(lossData)),
+             with = FALSE]
+    ## HACK (Michael): This is a hack, since there are no flag assignments yet
+    saveSelection[, `:=`(c("flagObservationStatus_measuredElement_5015",
+                           "flagMethod_measuredElement_5015"),
+                         list("I", "e"))]
+    saveSelection[, timePointYears := as.character(timePointYears)]
+    SaveData(domain = "agriculture", dataset = "agriculture",
+             data = saveSelection,
+             normalized = FALSE)
+}
+
 ## save(finalLossData, file = "finalLossData.RData")
 ## load("finalLossData.RData")
+
+## Build the final data set
+finalLossData =
+    {
+        lossData <<- getLossData()
+        nationalFbs <<- getNationalFbs()
+        lossDataWithNationalFbs <<- mergeNationalFbs(lossData, nationalFbs)
+        lossExternalData <<- getLossExternalData()
+        lossFoodGroup <<- getLossFoodGroup()
+        lossRegionClass <<- getLossRegionClass()
+        gc()
+        list(lossData = lossDataWithNationalFbs,
+             lossExternalData = lossExternalData,
+             lossFoodGroup = lossFoodGroup,
+             lossRegionClass = lossRegionClass)
+    } %>%
+    with(.,
+         mergeAllLossData(lossData, lossExternalData, lossFoodGroup,
+                          lossRegionClass)
+         )
+
+
 
 ## Build the data
 trainPredictData =
@@ -411,4 +436,8 @@ lossModel =
 imputedData =
     lossModelPrediction(model = lossModel,
                         predictionData = trainPredictData,
-                        lossRatio = "lossRatio")
+                        lossRatio = "lossRatio") %>%
+    head(x = .[!is.na(Value_measuredElement_5015), ], n = 1000)
+
+## Save the loss data back
+SaveLossData(imputedData)
